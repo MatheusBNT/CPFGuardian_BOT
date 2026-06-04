@@ -1,17 +1,13 @@
 # ============================================================
-# cpf_validator.R – Módulo de validação de CPF (Receita Federal)
+# cpf.R – Módulo de validação de CPF (Receita Federal)
 # ============================================================
 
 #' Remove tudo que não for dígito de uma string
-#' @param cpf string com o CPF
-#' @return string apenas com dígitos
 limpar_cpf <- function(cpf) {
   gsub("[^0-9]", "", trimws(cpf))
 }
 
 #' Formata um CPF limpo no padrão 000.000.000-00
-#' @param cpf_limpo string de 11 dígitos
-#' @return string formatada
 formatar_cpf <- function(cpf_limpo) {
   if (nchar(cpf_limpo) != 11) return(cpf_limpo)
   paste0(
@@ -23,9 +19,6 @@ formatar_cpf <- function(cpf_limpo) {
 }
 
 #' Calcula um dígito verificador do CPF
-#' @param digitos vetor numérico com os dígitos base
-#' @param peso_inicial peso inicial para o cálculo (10 para 1º dígito, 11 para 2º)
-#' @return dígito verificador calculado (0-9)
 calcular_digito <- function(digitos, peso_inicial) {
   pesos <- seq(peso_inicial, 2)
   soma  <- sum(digitos * pesos)
@@ -35,13 +28,7 @@ calcular_digito <- function(digitos, peso_inicial) {
 
 #' Valida um CPF de acordo com o algoritmo da Receita Federal
 #'
-#' @param cpf string com o CPF (com ou sem formatação)
-#' @return lista com campos:
-#'   \itemize{
-#'     \item \code{valido}         – logical TRUE/FALSE
-#'     \item \code{cpf_formatado}  – CPF no padrão 000.000.000-00 (ou o input original se inválido)
-#'     \item \code{motivo}         – descrição do erro (NA se válido)
-#'   }
+#' @return lista com: valido (logical), cpf_formatado (string), motivo (string ou NA)
 validar_cpf <- function(cpf) {
   cpf_original <- as.character(cpf)
   cpf_limpo    <- limpar_cpf(cpf_original)
