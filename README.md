@@ -1,117 +1,144 @@
-# 🤖 ValidaCPF Bot — Telegram + R
-
-Bot do Telegram escrito em R que valida CPFs usando o algoritmo oficial da Receita Federal.
-
+# 🤖 CPFGuardian BOT
+ 
+Bot do Telegram escrito em R que valida CPFs em tempo real, seguindo o algoritmo oficial da Receita Federal. A comunicação com o Telegram é feita diretamente via API HTTP, sem uso de nenhuma biblioteca específica do Telegram.
+ 
 ---
-
-## 📁 Estrutura do projeto
-
-```
-telegram_cpf_bot/
-├── bot.R               # Ponto de entrada — inicia o bot
-├── cpf_validator.R     # Módulo de validação de CPF (puro R, sem dependências externas)
-├── teste_validador.R   # Suite de testes do validador
-├── .env.exemplo        # Modelo para o arquivo de configuração
-└── README.md
-```
-
+ 
+## Funcionalidades
+ 
+- Valida CPFs com ou sem formatação (`123.456.789-09` ou `12345678909`)
+- Detecta sequências inválidas (`111.111.111-11`, `000.000.000-00`, etc.)
+- Verifica os dois dígitos verificadores pelo método módulo 11
+- Retorna o CPF formatado junto com o resultado
+- Exibe o motivo exato quando o CPF é inválido
+- Token protegido via variável de ambiente (arquivo `.env`)
 ---
-
-## ⚙️ Pré-requisitos
-
+ 
+## Pré-requisitos
+ 
 - R ≥ 4.0
-- Pacote `telegram.bot`
-
+- Pacote `httr`
+- Uma conta no Telegram e um bot criado via [@BotFather](https://t.me/BotFather)
+---
+ 
+## Instalação
+ 
+**1. Clone ou baixe o projeto:**
+ 
+```bash
+git clone https://github.com/seu-usuario/CPFGuardian_BOT.git
+cd CPFGuardian_BOT
+```
+ 
+**2. Instale a dependência:**
+ 
 ```r
-install.packages("telegram.bot")
+install.packages("httr")
 ```
-
+ 
+**3. Crie o bot no Telegram:**
+ 
+- Abra o Telegram e converse com [@BotFather](https://t.me/BotFather)
+- Digite `/newbot` e siga as instruções
+- Copie o token gerado (formato: `123456789:ABC-xyz...`)
+**4. Configure o token:**
+ 
+Crie um arquivo `.env` na raiz do projeto com o conteúdo:
+ 
+```
+TELEGRAM_TOKEN=SEU_TOKEN_AQUI
+```
+ 
+> ⚠️ O arquivo `.env` já está no `.gitignore` e **nunca deve ser commitado**.
+ 
 ---
-
-## 🚀 Como usar
-
-### 1. Criar o bot no Telegram
-
-1. Abra o Telegram e procure por **@BotFather**
-2. Envie `/newbot` e siga as instruções
-3. Copie o **token** fornecido ao final
-
-### 2. Configurar o token
-
-Crie um arquivo `.env` na raiz do projeto:
-
-```
-TELEGRAM_BOT_TOKEN=1234567890:ABCDefGhIJKlmNoPQRsTUVwxyZ
-```
-
-Ou exporte como variável de ambiente antes de iniciar o R:
-
+ 
+## Como executar
+ 
+Entre na pasta do projeto e rode:
+ 
 ```bash
-export TELEGRAM_BOT_TOKEN="1234567890:ABCDefGhIJKlmNoPQRsTUVwxyZ"
+cd C:\Users\seu-usuario\CPFGuardian_BOT
+Rscript main.R
 ```
-
-### 3. Iniciar o bot
-
-```r
-source("bot.R")
+ 
+Quando o bot iniciar, você verá no terminal:
+ 
 ```
-
-Ou via terminal:
-
-```bash
-Rscript bot.R
+🤖 Bot iniciado! Aguardando mensagens...
+   Pressione Ctrl+C para encerrar.
 ```
-
+ 
+A partir daí, qualquer mensagem enviada ao bot no Telegram será processada e respondida.
+ 
 ---
-
-## ✅ Executar os testes
-
-```bash
-Rscript teste_validador.R
-```
-
-Saída esperada: todos os 9 casos de teste passando.
-
+ 
+## Como usar o bot
+ 
+| Você envia | Bot responde |
+|---|---|
+| `/start` ou `/ajuda` | Mensagem de boas-vindas com instruções |
+| `123.456.789-09` | ✅ CPF válido |
+| `12345678909` | ✅ CPF válido |
+| `111.111.111-11` | ❌ CPF com todos os dígitos iguais não é válido |
+| `123.456.789-00` | ❌ Dígitos verificadores inválidos |
+| `1234` | ⚠️ CPF não reconhecido |
+ 
 ---
-
-## 💬 Comandos do bot
-
-| Comando  | Descrição                      |
-|----------|-------------------------------|
-| `/start` | Mensagem de boas-vindas        |
-| `/ajuda` | Instruções de uso              |
-| (texto)  | Valida o CPF enviado           |
-
-### Exemplos de uso no Telegram
-
+ 
+## Estrutura do projeto
+ 
 ```
-Você:  529.982.247-25
-Bot:   ✅ CPF Válido!
-       📋 CPF informado: 529.982.247-25
-
-Você:  123.456.789-00
-Bot:   ❌ CPF Inválido!
-       📋 CPF informado: 123.456.789-00
-       ℹ️ Motivo: Dígitos verificadores inválidos
+CPFGuardian_BOT/
+├── main.R           # Ponto de entrada — carrega os módulos e inicia o loop
+├── config.R         # Lê o token do .env e define configurações globais
+├── telegram_api.R   # Funções de comunicação com a API HTTP do Telegram
+├── cpf.R            # Algoritmo de validação e formatação de CPF
+├── handlers.R       # Lógica de resposta para cada tipo de mensagem
+├── .env             # Token do bot (não versionado)
+└── .gitignore       # Garante que o .env não vá para o repositório
 ```
-
+ 
+### Responsabilidade de cada arquivo
+ 
+**`config.R`** — lê o `.env`, define `TOKEN`, `BASE_URL`, `TIMEOUT_S` e o operador `%||%`. Nenhum segredo fica hardcoded no código.
+ 
+**`telegram_api.R`** — encapsula as duas chamadas à API do Telegram:
+- `get_updates(offset)` — busca novas mensagens via long polling
+- `send_message(chat_id, text)` — envia uma resposta ao usuário
+**`cpf.R`** — módulo de negócio isolado e testável:
+- `limpar_cpf()` — remove máscara
+- `formatar_cpf()` — aplica máscara `000.000.000-00`
+- `calcular_digito()` — módulo 11
+- `validar_cpf()` — retorna `list(valido, cpf_formatado, motivo)`
+**`handlers.R`** — decide o que responder com base no texto recebido.
+ 
+**`main.R`** — carrega todos os módulos com `source()` e executa o loop de polling.
+ 
 ---
-
-## 🔍 Algoritmo de validação
-
-O validador aplica os critérios da Receita Federal:
-
-1. **Comprimento**: exatamente 11 dígitos numéricos
-2. **Sequências inválidas**: rejeita CPFs com todos os dígitos iguais (ex: `111.111.111-11`)
-3. **1º dígito verificador**: soma ponderada dos 9 primeiros dígitos (pesos 10→2), resto da divisão por 11
-4. **2º dígito verificador**: soma ponderada dos 10 primeiros dígitos (pesos 11→2), resto da divisão por 11
-
+ 
+## Segurança do token
+ 
+O token **nunca** fica escrito no código-fonte. O fluxo é:
+ 
+```
+.env  →  Sys.setenv()  →  Sys.getenv("TELEGRAM_BOT_TOKEN")  →  TOKEN
+```
+ 
+O `.gitignore` bloqueia o `.env` para que ele não seja enviado ao repositório acidentalmente. Se o token for comprometido, revogue-o diretamente no [@BotFather](https://t.me/BotFather) com o comando `/revoke`.
+ 
 ---
-
-## 📦 Dependências
-
-| Pacote        | Versão mínima | Uso                     |
-|---------------|---------------|-------------------------|
-| `telegram.bot`| 2.4.0         | Interface com a API do Telegram |
-
-O módulo `cpf_validator.R` é puro R base — sem dependências externas.
+ 
+## Algoritmo de validação (Receita Federal)
+ 
+1. Remove a formatação e verifica se há exatamente 11 dígitos
+2. Rejeita sequências com todos os dígitos iguais
+3. Calcula o **1º dígito verificador**: multiplica os 9 primeiros dígitos pelos pesos 10 a 2, soma os produtos, calcula o resto por 11; se o resto for < 2, o dígito é 0, caso contrário é 11 − resto
+4. Repete o processo para o **2º dígito verificador** usando os 10 primeiros dígitos e pesos 11 a 2
+5. Compara os dígitos calculados com os informados
+---
+ 
+## Licença
+ 
+MIT
+ 
