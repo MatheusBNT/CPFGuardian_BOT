@@ -1,71 +1,106 @@
-  library(httr)
-library(jsonlite)
+## ---------------------------------------------------------
+## Bot validador de CPF — R + httr2 + Telegram Bot API
+## ---------------------------------------------------------
 
-TOKEN <- Sys.getenv("BOT_TOKEN")
-BASE_URL <- paste0("https://api.telegram.org/bot", TOKEN)
+library(httr2)
 
-validar_cpf <- function(cpf) {
+# --- Configuração ---------------------------------------------------
 
-  cpf <- gsub("[^0-9]", "", cpf)
+token <- Sys.getenv("TELEGRAM_BOT_TOKEN")
 
-  if (nchar(cpf) != 11)
-    return(FALSE)
-
-  if (length(unique(strsplit(cpf, "")[[1]])) == 1)
-    return(FALSE)
-
-  nums <- as.numeric(strsplit(cpf, "")[[1]])
-
-  soma1 <- sum(nums[1:9] * 10:2)
-  dig1 <- 11 - (soma1 %% 11)
-  if (dig1 >= 10) dig1 <- 0
-
-  soma2 <- sum(nums[1:10] * 11:2)
-  dig2 <- 11 - (soma2 %% 11)
-  if (dig2 >= 10) dig2 <- 0
-
-  nums[10] == dig1 && nums[11] == dig2
+if (token == "") {
+  stop("Variável TELEGRAM_BOT_TOKEN não definida. Configure-a antes de rodar o bot.")
 }
 
-ultimo_update <- 0
+base_url <- paste0("https://api.telegram.org/bot", token)
 
-while(TRUE) {
+# --- Função de validação de CPF --------------------------------------
 
-  resp <- GET(
-    paste0(BASE_URL, "/getUpdates"),
-    query = list(offset = ultimo_update + 1, timeout = 30)
+validar_cpf <- function(cpf) {
+  cpf <- gsub("[^0-9]", "", cpf)
+
+  # precisa ter exatamente 11 dígitos
+  if (nchar(cpf) != 11) return(FALSE)
+
+  digitos <- as.integer(strsplit(cpf, "")[[1]])
+
+  # rejeita sequências de dígitos repetidos (ex: 00000000000, 11111111111)
+  if (length(unique(digitos)) == 1) return(FALSE)
+
+  calcular_digito <- function(nums, pesos) {
+    soma <- sum(nums * pesos)
+    resto <- soma %% 11
+    if (resto < 2) 0L else as.integer(11 - resto)
+  }
+
+  d1 <- calcular_digito(digitos[1:9], 10:2)
+  d2 <- calcular_digito(digitos[1:10], 11:2)
+
+  d1 == digitos[10] && d2 == digitos[11]
+}
+
+# --- Funções de comunicação com o Telegram ---------------------------
+
+enviar_mensagem <- function(chat_id, texto) {
+  request(paste0(base_url, "/sendMessage")) |>
+    req_body_json(list(chat_id = chat_id, text = texto)) |>
+    req_perform()
+}
+
+obter_atualizacoes <- function(offset = NULL) {
+  req <- request(paste0(base_url, "/getUpdates")) |>
+    req_url_query(timeout = 30, offset = offset)
+
+  resp <- req_perform(req)
+  resp_body_json(resp)
+}
+
+formatar_cpf <- function(cpf) {
+  cpf <- gsub("[^0-9]", "", cpf)
+  sprintf("%s.%s.%s-%s",
+          substr(cpf, 1, 3), substr(cpf, 4, 6),
+          substr(cpf, 7, 9), substr(cpf, 10, 11))
+}
+
+# --- Loop principal do bot --------------------------------------------
+
+offset <- NULL
+message("Bot iniciado. Aguardando mensagens no Telegram...")
+
+while (TRUE) {
+  atualizacoes <- tryCatch(
+    obter_atualizacoes(offset),
+    error = function(e) {
+      message("Erro ao buscar atualizações: ", conditionMessage(e))
+      NULL
+    }
   )
 
-  dados <- fromJSON(content(resp, "text", encoding = "UTF-8"))
+  if (!is.null(atualizacoes) && length(atualizacoes$result) > 0) {
+    for (update in atualizacoes$result) {
+      offset <- update$update_id + 1
 
-  if (dados$ok && length(dados$result) > 0) {
+      texto <- update$message$text
+      chat_id <- update$message$chat$id
 
-    for (i in seq_along(dados$result$update_id)) {
+      if (is.null(texto) || is.null(chat_id)) next
 
-      update <- dados$result[i, ]
-
-      ultimo_update <- update$update_id
-
-      chat_id <- update$message.chat.id
-      texto <- update$message.text
-
-      if (!is.null(texto) && nzchar(texto)) {
-
+      if (texto == "/start") {
+        resposta <- "Olá! Me envie um número de CPF (com ou sem pontuação) e eu digo se ele é válido."
+      } else if (grepl("[0-9]", texto)) {
         if (validar_cpf(texto)) {
-          resposta <- "✅ CPF válido!"
+          resposta <- paste0("✅ CPF válido: ", formatar_cpf(texto))
         } else {
-          resposta <- "❌ CPF inválido!"
+          resposta <- paste0("❌ CPF inválido: ", texto)
         }
-
-        POST(
-          paste0(BASE_URL, "/sendMessage"),
-          body = list(
-            chat_id = chat_id,
-            text = resposta
-          ),
-          encode = "form"
-        )
+      } else {
+        resposta <- "Envie um número de CPF para eu validar."
       }
+
+      tryCatch(
+        enviar_mensagem(chat_id, resposta),
+        error = function(e) message("Erro ao enviar mensagem: ", conditionMessage(e))
+      )
     }
   }
 
